@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/order_provider.dart';
 import '../models/order_plan.dart';
+import 'order_planning_screen.dart';
 
 class OrderHistoryScreen extends StatefulWidget {
   const OrderHistoryScreen({super.key});
@@ -149,18 +150,47 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
               ),
             ),
 
-            // Delete Button (Requirement 5: Delete)
+            // Delete and Edit Buttons (Requirement 5: Edit and Delete)
             Padding(
               padding: const EdgeInsets.only(top: 10.0),
-              child: ElevatedButton.icon(
-                onPressed: () => _deletePlan(plan, provider),
-                icon: const Icon(Icons.delete_forever),
-                label: const Text('Delete This Order Plan'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 45),
-                ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        // Navigate to planning screen with the plan data
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => OrderPlanningScreen(planToEdit: plan),
+                          ),
+                        ).then((_) {
+                          // When returning from the edit screen, re-query the history
+                          _queryPlan();
+                        });
+                      },
+                      icon: const Icon(Icons.edit),
+                      label: const Text('Edit This Plan'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade700,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 45),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _deletePlan(plan, provider),
+                      icon: const Icon(Icons.delete_forever),
+                      label: const Text('Delete Plan'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 45),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

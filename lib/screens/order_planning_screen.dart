@@ -3,9 +3,12 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/order_provider.dart';
 import 'order_history_screen.dart';
+import '../models/order_plan.dart';
+import '../services/database_helper.dart';
 
 class OrderPlanningScreen extends StatefulWidget {
-  const OrderPlanningScreen({super.key});
+  final OrderPlan? planToEdit;
+  const OrderPlanningScreen({super.key, this.planToEdit});
 
   @override
   State<OrderPlanningScreen> createState() => _OrderPlanningScreenState();
@@ -19,9 +22,28 @@ class _OrderPlanningScreenState extends State<OrderPlanningScreen> {
   @override
   void initState() {
     super.initState();
-    // Default the target cost to a reasonable starting value
-    _targetCostController.text = '25.00';
-    _targetCost = 25.00;
+    final provider = context.read<OrderProvider>();
+
+    if (widget.planToEdit != null) {
+      // 🆕 NEW: Load data from the plan being edited
+      final plan = widget.planToEdit!;
+
+      _selectedDate = DateFormat('yyyy-MM-dd').parse(plan.date);
+      _targetCost = plan.targetCost;
+      _targetCostController.text = plan.targetCost.toStringAsFixed(2);
+
+      // Select the food items from the saved plan
+      final idsList = plan.foodItemIds.split(',').map((id) => int.tryParse(id)).where((id) => id != null).cast<int>().toList();
+
+      // We need a special method in OrderProvider to load a selection
+      provider.loadSelectionFromPlan(idsList, plan.totalCost);
+
+    } else {
+      // Original setup for new plan
+      _targetCostController.text = '25.00';
+      _targetCost = 25.00;
+      provider.clearCurrentSelection(); // Ensure no leftover selection from history query
+    }
   }
 
   @override
@@ -63,14 +85,39 @@ class _OrderPlanningScreenState extends State<OrderPlanningScreen> {
 
     final String formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
 
+    // Check for existing plan for this date
+    final existingPlan = await DatabaseHelper.instance.readOrderPlanByDate(formattedDate);
+
+    if (existingPlan != null && widget.planToEdit == null) {
+      // If a plan exists AND we are not in an edit flow: BLOCK the save
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Only one food list available for $formattedDate. Use the History page to Edit the existing plan.'),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
+    // Determine if this is a CREATE or an UPDATE operation
+    final bool isUpdate = widget.planToEdit != null;
+
+    // Save/Update the plan using the provider (which now handles both)
     await provider.saveOrderPlan(
       date: formattedDate,
       targetCost: _targetCost,
+      isUpdate: isUpdate, // Pass flag to provider
+      existingPlanId: isUpdate ? widget.planToEdit!.id : null,
     );
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Order Plan for $formattedDate saved successfully!')),
+      SnackBar(content: Text('Order Plan for $formattedDate ${isUpdate ? 'updated' : 'saved'} successfully!')),
     );
+
+    // After updating, navigate back if it was an edit session
+    if (isUpdate) {
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -192,7 +239,7 @@ class _OrderPlanningScreenState extends State<OrderPlanningScreen> {
             // Cost Validation Message (Requirement 2)
             if (isOverBudget)
               const Text(
-                '⚠️ BUDGET EXCEEDED!',
+                'BUDGET EXCEEDED!',
                 style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
               ),
             if (!isOverBudget && provider.currentTotalCost > 0)

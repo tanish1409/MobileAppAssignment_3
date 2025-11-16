@@ -86,6 +86,15 @@ class OrderProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Load selection state from OrderPlan for editing
+  void loadSelectionFromPlan(List<int> ids, double totalCost) {
+    _selectedFoodItemIds
+      ..clear()
+      ..addAll(ids);
+    _currentTotalCost = totalCost;
+    // NOTE: We don't call notifyListeners() here, as initState will rebuild the screen anyway.
+  }
+
   // ------------------------------------
   // Order Plan CRUD (Requirement 3, 5)
   // ------------------------------------
@@ -94,18 +103,27 @@ class OrderProvider extends ChangeNotifier {
   Future<void> saveOrderPlan({
     required String date,
     required double targetCost,
+    required bool isUpdate, // 🆕 NEW FLAG
+    int? existingPlanId, // 🆕 NEW ID for update
   }) async {
     final idsString = _selectedFoodItemIds.join(',');
 
     final plan = OrderPlan(
+      id: isUpdate ? existingPlanId : null, // Use existing ID for update
       date: date,
       targetCost: targetCost,
       totalCost: _currentTotalCost,
       foodItemIds: idsString,
     );
 
-    await DatabaseHelper.instance.createOrderPlan(plan);
-    clearCurrentSelection(); // Clear selection after saving
+    if (isUpdate && existingPlanId != null) {
+      await DatabaseHelper.instance.updateOrderPlan(plan);
+    } else {
+      // Note: We skip the uniqueness check here, as it is now in the UI.
+      await DatabaseHelper.instance.createOrderPlan(plan);
+    }
+
+    clearCurrentSelection(); // Clear selection after saving/updating
   }
 
   // Deletes an Order Plan (Requirement 5: Delete)
